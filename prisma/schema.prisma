@@ -1,0 +1,406 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//#region ======Enums
+enum supported_language {
+  en
+  my
+  jp
+  th
+}
+
+enum currency {
+  USD
+  MMK
+  JPY
+  THB
+}
+
+enum day_of_week {
+  monday
+  tuesday
+  wednesday
+  thursday
+  friday
+  saturday
+  sunday
+}
+
+enum role {
+  admin
+  kitchen
+  cashier
+  super_admin
+}
+
+enum variant_type {
+  admin
+  kitchen
+  cashier
+}
+
+enum price_entity_type {
+  variant
+  addon
+  menu_item
+}
+
+//#endregion Enums
+
+model Role {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String     @db.VarChar
+  description String?    @db.Text
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz()
+  userRole    UserRole[]
+
+  @@map("roles")
+}
+
+model Tenant {
+  id          String    @id @default(uuid())
+  name        String    @default("")
+  description String    @default("")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz()
+
+  menuItems MenuItem[]
+  users     User[]
+  branches  Branch[]
+  tables    Table[]
+  orders    Order[]
+
+  @@map("tenants")
+}
+
+model Branch {
+  id            String    @id @default(uuid())
+  name          String    @default("")
+  phone         String    @default("")
+  email         String    @default("")
+  address       String    @default("")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz()
+  tenantId      String    @map("tenant_id") @db.Uuid
+  currency      currency
+  logoImageUrl  String    @default("")
+  coverImageUrl String    @default("")
+  lat           Float     @default(0)
+  long          Float     @default(0)
+  radius        Int       @default(0)
+
+  // Relation fields
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  branchLanguages BranchLanguage[]
+  Table           Table[]
+  Order           Order[]
+
+  @@map("branches")
+}
+
+model BranchLanguage {
+  id       String             @id @default(uuid())
+  branchId String             @map("branch_id") @db.Uuid
+  language supported_language
+
+  // Relations
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("branch_languages")
+}
+
+model User {
+  id        String    @id @db.Uuid
+  name      String    @default("") @db.VarChar
+  email     String    @default("") @db.VarChar
+  tenantId  String    @map("tenant_id") @db.Uuid
+  branchId  String?   @map("branch_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id])
+  roles  UserRole[]
+
+  @@map("users")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+//#region Menu Category
+model MenuCategory {
+  id               String    @id @default(uuid())
+  name             String    @default("")
+  description      String    @default("")
+  imageUrl         String    @default("") @map("image_url")
+  tenantId         String    @map("tenant_id") @db.Uuid
+  branchId         String    @map("branch_id") @db.Uuid
+  position         Int
+  isAvailableDaily Boolean   @default(true) @map("is_available_daily")
+  isArchived       Boolean   @default(false) @map("is_archived")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz()
+
+  availabilities MenuCategoryAvailability[]
+  items          MenuItem[]
+
+  @@map("menu_categories")
+}
+
+model MenuCategoryAvailability {
+  id         String      @id @default(uuid())
+  dayOfWeek  day_of_week @map("day_of_week")
+  startTime  DateTime    @default(dbgenerated("'00:00:00'::time without time zone")) @map("start_time") @db.Time
+  endTime    DateTime    @default(dbgenerated("'24:00:00'::time without time zone")) @map("end_time") @db.Time
+  categoryId String      @map("category_id")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt  DateTime?   @map("deleted_at") @db.Timestamptz()
+
+  category MenuCategory @relation(fields: [categoryId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+
+  @@map("menu_category_availability")
+}
+
+//#endregion Menu Category
+
+//#region Add On
+model AddonGroup {
+  id         String    @id @default(uuid())
+  name       String    @unique @default("")
+  isRequired Boolean   @default(false) @map("is_required")
+  tenantId   String    @map("tenant_id") @db.Uuid
+  branchId   String    @map("branch_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz()
+
+  addons Addon[]
+
+  @@map("addon_groups")
+}
+
+model Addon {
+  id        String    @id @default(uuid())
+  name      String    @default("")
+  price     Decimal
+  currency  currency
+  groupId   String    @map("group_id")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+
+  group         AddonGroup      @relation(fields: [groupId], references: [id])
+  menuItemAddOn MenuItemAddon[]
+
+  @@map("addons")
+}
+
+model MenuItem {
+  id          String    @id @default(uuid())
+  name        String    @default("") @db.VarChar(255)
+  description String    @default("") @db.Text
+  imageUrl    String    @default("") @map("image_url") @db.Text
+  categoryId  String    @map("category_id")
+  position    Int
+  branchId    String    @map("branch_id") @db.Uuid
+  outOfStock  Boolean   @default(false) @map("out_of_stock")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz()
+
+  category     MenuCategory      @relation(fields: [categoryId], references: [id])
+  tenant       Tenant            @relation(fields: [branchId], references: [id])
+  addons       MenuItemAddon[]
+  translations ItemTranslation[]
+  prices       MenuItemPrice[]
+  badges       ItemBadge[]
+  OrderItem    OrderItem[]
+
+  @@map("menu_items")
+}
+
+model MenuItemPrice {
+  id         String    @id @default(uuid())
+  itemId     String    @map("item_id")
+  name       String?
+  price      Decimal
+  currency   currency
+  outOfStock Boolean   @default(false) @map("out_of_stock")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamptz()
+
+  menuItem   MenuItem    @relation(fields: [itemId], references: [id]) // One-to-many relation
+  orderItems OrderItem[] // One-to-many relation with OrderItem
+
+  @@map("menu_item_prices")
+}
+
+model MenuItemAddon {
+  itemId  String @map("item_id")
+  addonId String @map("addon_id")
+
+  item  MenuItem @relation(fields: [itemId], references: [id])
+  addOn Addon    @relation(fields: [addonId], references: [id])
+
+  @@id([itemId, addonId]) // Composite primary key
+  @@map("menu_item_addons")
+}
+
+model ItemTranslation {
+  id          String             @id @default(uuid())
+  itemId      String             @map("item_id")
+  name        String             @default("")
+  description String             @default("")
+  language    supported_language
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @default(now())
+  deletedAt   DateTime?
+
+  item MenuItem @relation(fields: [itemId], references: [id])
+
+  @@unique([itemId, language]) // Unique constraint for itemId and language combination
+  @@map("item_translations")
+}
+
+model Badge {
+  id        String    @id @default(uuid())
+  name      String    @default("")
+  tenantId  String    @map("tenant_id") @db.Uuid
+  branchId  String    @map("branch_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+
+  menuItemBadges ItemBadge[]
+
+  @@map("badges")
+}
+
+model ItemBadge {
+  itemId  String @map("item_id")
+  badgeId String @map("badge_id")
+
+  item  MenuItem @relation(fields: [itemId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  badge Badge    @relation(fields: [badgeId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+
+  @@id([itemId, badgeId]) // Composite primary key
+  @@map("item_badges") // Table mapping
+}
+
+// #endregion Menu Item 
+
+model Table {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @default("") @db.VarChar
+  qrCode    String    @default("") @map("qr_code") @db.Text
+  tenantId  String    @map("tenant_id") @db.Uuid
+  branchId  String    @map("branch_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  branch Branch  @relation(fields: [branchId], references: [id])
+  Order  Order[]
+
+  @@map("tables")
+}
+
+enum order_status {
+  in_kitchen
+  cooking
+  completed
+}
+
+enum order_type {
+  takeaway
+  dine_in
+}
+
+model Order {
+  id          String       @id @default(uuid()) @db.Uuid
+  orderNumber Int          @map("order_number")
+  tenantId    String       @map("tenant_id") @db.Uuid
+  branchId    String       @map("branch_id") @db.Uuid
+  tableId     String?      @map("table_id") @db.Uuid
+  userId      String?      @map("user_id") @db.Uuid
+  userDevice  String       @default("") @map("user_device") @db.Text
+  status      order_status
+  type        order_type   @default(dine_in)
+  paid        Boolean      @default(false)
+  subTotal    Decimal      @map("sub_total")
+  tax         Decimal
+  quantity    Int
+  total       Decimal
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+
+  orderItems OrderItem[]
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  branch     Branch      @relation(fields: [branchId], references: [id])
+  table      Table?      @relation(fields: [tableId], references: [id])
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                  String  @id @default(uuid()) @db.Uuid
+  orderId             String  @map("order_id") @db.Uuid
+  itemId              String  @map("item_id") @db.Uuid
+  priceId             String? @map("price_id") @db.Uuid
+  quantity            Int     @map("quantity")
+  total               Decimal
+  specialInstructions String  @default("") @map("special_instructions") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  order    Order          @relation(fields: [orderId], references: [id])
+  menuItem MenuItem       @relation(fields: [itemId], references: [id])
+  price    MenuItemPrice? @relation(fields: [priceId], references: [id]) // Added relation to MenuItemPrice
+
+  @@map("order_items")
+}
+
+model BranchLastOrderNumber {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  branchId        String    @map("branch_id") @db.Uuid
+  lastOrderNumber Int       @default(0) @map("last_order_number")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@map("branch_last_order_numbers")
+}
