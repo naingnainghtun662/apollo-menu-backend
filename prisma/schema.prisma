@@ -60,9 +60,9 @@ enum price_entity_type {
 //#endregion Enums
 
 model Role {
-  id          String     @id @default(uuid()) @db.Uuid
   name        String     @db.VarChar
   description String?    @db.Text
+  id          String     @id @default(uuid()) @db.Uuid
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz()
@@ -116,9 +116,12 @@ model Branch {
 }
 
 model BranchLanguage {
-  id       String             @id @default(uuid())
-  branchId String             @map("branch_id") @db.Uuid
-  language supported_language
+  id        String             @id @default(uuid()) @db.Uuid
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime?          @map("deleted_at") @db.Timestamptz()
+  branchId  String             @map("branch_id") @db.Uuid
+  language  supported_language
 
   // Relations
   branch Branch @relation(fields: [branchId], references: [id])
@@ -143,13 +146,16 @@ model User {
 }
 
 model UserRole {
-  userId String @map("user_id") @db.Uuid
-  roleId String @map("role_id") @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  userId    String    @map("user_id") @db.Uuid
+  roleId    String    @map("role_id") @db.Uuid
 
   user User @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: Cascade)
   role Role @relation(fields: [roleId], references: [id])
 
-  @@id([userId, roleId])
   @@map("user_roles")
 }
 
@@ -265,13 +271,16 @@ model MenuItemPrice {
 }
 
 model MenuItemAddon {
-  itemId  String @map("item_id")
-  addonId String @map("addon_id")
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  itemId    String    @map("item_id")
+  addonId   String    @map("addon_id")
 
   item  MenuItem @relation(fields: [itemId], references: [id])
   addOn Addon    @relation(fields: [addonId], references: [id])
 
-  @@id([itemId, addonId]) // Composite primary key
   @@map("menu_item_addons")
 }
 
@@ -306,13 +315,16 @@ model Badge {
 }
 
 model ItemBadge {
-  itemId  String @map("item_id")
-  badgeId String @map("badge_id")
+  id        String    @id @default(uuid()) @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  itemId    String    @map("item_id")
+  badgeId   String    @map("badge_id")
 
   item  MenuItem @relation(fields: [itemId], references: [id], onUpdate: Cascade, onDelete: Cascade)
   badge Badge    @relation(fields: [badgeId], references: [id], onUpdate: Cascade, onDelete: Cascade)
 
-  @@id([itemId, badgeId]) // Composite primary key
   @@map("item_badges") // Table mapping
 }
 
